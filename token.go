@@ -7,9 +7,42 @@ import (
 )
 
 const (
-	//获取调用凭证AccessToken
+	// 获取调用凭证AccessToken
 	getTokenAddr = "https://qyapi.weixin.qq.com/cgi-bin/gettoken?corpid=%s&corpsecret=%s"
+	// 获取自建应用凭证
+	getSuiteToken = "https://qyapi.weixin.qq.com/cgi-bin/service/get_suite_token"
+	// 获取自建应用调用企业凭证AccessToken
+	getCorpTokenAddr = "https://qyapi.weixin.qq.com/cgi-bin/service/get_corp_token?suite_access_token=%s"
 )
+
+type SuiteAccessTokenSchema struct {
+	BaseModel
+	SuiteAccessToken string `json:"suite_access_token"`
+	ExpiresIn        int    `json:"expires_in"`
+}
+
+type GetSuiteAccessTokenOptions struct {
+	SuiteId     string `json:"suite_id"`
+	SuiteSecret string `json:"suite_secret"`
+	SuiteTicket string `json:"suite_ticket"`
+}
+
+func (r *Client) getSuiteToken(options GetSuiteAccessTokenOptions) (info SuiteAccessTokenSchema, err error) {
+	data, err := util.HttpPost(getSuiteToken, options)
+	if err != nil {
+		return
+	}
+	_ = json.Unmarshal(data, &info)
+	if info.ErrCode != 0 {
+		return info, NewSDKErr(info.ErrCode, info.ErrMsg)
+	}
+	return info, nil
+}
+
+type GetCorpTokenOptions struct {
+	AuthCorpid    string `json:"auth_corpid"`
+	PermanentCode string `json:"permanent_code"`
+}
 
 // AccessTokenSchema 获取调用凭证响应数据
 type AccessTokenSchema struct {
@@ -20,7 +53,25 @@ type AccessTokenSchema struct {
 
 // GetAccessToken 获取调用凭证access_token
 func (r *Client) GetAccessToken() (info AccessTokenSchema, err error) {
-	data, err := util.HttpGet(fmt.Sprintf(getTokenAddr, r.corpID, r.secret))
+	var data []byte
+	if r.isCustomizedApp {
+		var suiteToken SuiteAccessTokenSchema
+		suiteToken, err = r.getSuiteToken(GetSuiteAccessTokenOptions{
+			SuiteId:     r.suiteId,
+			SuiteSecret: r.suiteSecret,
+			SuiteTicket: r.suiteTicket,
+		})
+		if err != nil {
+			return
+		}
+		data, err = util.HttpPost(fmt.Sprintf(getCorpTokenAddr, suiteToken.SuiteAccessToken), GetCorpTokenOptions{
+			AuthCorpid:    r.corpID,
+			PermanentCode: r.permanentCode,
+		})
+	} else {
+		data, err = util.HttpGet(fmt.Sprintf(getTokenAddr, r.corpID, r.secret))
+	}
+
 	if err != nil {
 		return info, err
 	}
