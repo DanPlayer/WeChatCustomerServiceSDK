@@ -71,6 +71,7 @@ func New(options Options) (client *Client, err error) {
 		suiteId:         options.SuiteId,
 		suiteSecret:     options.SuiteSecret,
 		suiteTicket:     options.SuiteTicket,
+		permanentCode:   options.PermanentCode,
 	}
 
 	if options.Secret != "" {
